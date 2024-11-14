@@ -1,8 +1,9 @@
-#include <NimBLEDevice.h>
 #include <Arduino.h>
+#include <NimBLEDevice.h>
 
 int16_t analogInputFixedPoint = 0;  // Stores the fixed-point value received
-float analogInputVal = 0.0;         // Stores the floating-point value converted from fixed-point
+float analogInputVal =
+    0.0;  // Stores the floating-point value converted from fixed-point
 
 struct GPSData_s {
   double longitude;
@@ -25,18 +26,22 @@ void decodeBeaconData(char beacon_data[19], BeaconData_t& decodedData) {
   decodedData.gps.status = beacon_data[6];
 
   // Decode the longitude
-  int32_t longitudeFixedPoint = ((int32_t)beacon_data[7] << 24) | ((int32_t)beacon_data[8] << 16) | ((int32_t)beacon_data[9] << 8) | (int32_t)beacon_data[10];
+  int32_t longitudeFixedPoint =
+      ((int32_t)beacon_data[7] << 24) | ((int32_t)beacon_data[8] << 16) |
+      ((int32_t)beacon_data[9] << 8) | (int32_t)beacon_data[10];
   decodedData.gps.longitude = longitudeFixedPoint / 256.0;  // Convert to double
 
   // Decode the latitude
-  int32_t latitudeFixedPoint = ((int32_t)beacon_data[11] << 24) | ((int32_t)beacon_data[12] << 16) | ((int32_t)beacon_data[13] << 8) | (int32_t)beacon_data[14];
+  int32_t latitudeFixedPoint =
+      ((int32_t)beacon_data[11] << 24) | ((int32_t)beacon_data[12] << 16) |
+      ((int32_t)beacon_data[13] << 8) | (int32_t)beacon_data[14];
   decodedData.gps.latitude = latitudeFixedPoint / 256.0;  // Convert to double
 
   // Decode the hour meter (4 bytes)
-  decodedData.hourMeter = ((uint32_t)beacon_data[15] << 24) | ((uint32_t)beacon_data[16] << 16) | ((uint32_t)beacon_data[17] << 8) | (uint32_t)beacon_data[18];
+  decodedData.hourMeter =
+      ((uint32_t)beacon_data[15] << 24) | ((uint32_t)beacon_data[16] << 16) |
+      ((uint32_t)beacon_data[17] << 8) | (uint32_t)beacon_data[18];
 }
-
-
 
 // NimBLE callback to process the received advertisement data
 class MyAdvertisedDeviceCallbacks : public NimBLEAdvertisedDeviceCallbacks {
@@ -83,7 +88,8 @@ void setup() {
   NimBLEScan* pBLEScan = NimBLEDevice::getScan();
 
   // Set the callback for processing the received advertising data
-  pBLEScan->setAdvertisedDeviceCallbacks(new MyAdvertisedDeviceCallbacks(), true);
+  pBLEScan->setAdvertisedDeviceCallbacks(new MyAdvertisedDeviceCallbacks(),
+                                         true);
 
   // Start scanning for BLE devices
   pBLEScan->setActiveScan(true);
