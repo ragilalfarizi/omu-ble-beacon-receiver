@@ -18,3 +18,5 @@ class MyAdvertisedDeviceCallbacks : public NimBLEAdvertisedDeviceCallbacks {
 BeaconData_t decodeBeaconData(char (&beacon_data)[19]);
 
 void printBLEHex(std::string& serviceData, size_t length);
+
+void printBeaconData(const BeaconData_t& data);

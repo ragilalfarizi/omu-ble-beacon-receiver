@@ -24,6 +24,7 @@ void dataProcessing(void* pvParameter);
 TaskHandle_t BLEHandler            = NULL;
 TaskHandle_t dataProcessingHandler = NULL;
 TaskHandle_t RS485Handler          = NULL;
+TaskHandle_t printUnorderedMap     = NULL;
 
 /* QUEUES AND SEMAPHORE DECLARATION */
 QueueHandle_t beaconRawData_Q;
@@ -93,23 +94,8 @@ void dataProcessing(void* pvParameter) {
       // TODO: add to unordered map. (NO DUPLICATE. UPDATE IF THE SAME KEY EXIST
       // BUT THE REST OF DATA IS CHANGING)
 
-      Serial.printf("==================\n");
-      Serial.printf(
-          "Beacon ID: %s\n",
-          data.ID.c_str());  // Print the ID (String -> c_str() for printf)
-      Serial.printf("Voltage Supply: %.2f V\n",
-                    data.voltageSupply);  // Print voltage supply as float
-      Serial.printf("GPS Status: %c\n",
-                    data.gps.status);  // Print GPS status as integer
-      Serial.printf(
-          "Longitude: %.6f\n",
-          data.gps.longitude);  // Print longitude as float with 6 decimals
-      Serial.printf(
-          "Latitude: %.6f\n",
-          data.gps.latitude);  // Print latitude as float with 6 decimals
-      Serial.printf("Hour Meter: %lu\n",
-                    data.hourMeter);  // Print hour meter as unsigned long
-      Serial.printf("==================\n");
+      // UNCOMMENT TO PRINT DEBUG
+      // printBeaconData(data);
     } else {
       Serial.println("Beacon Raw Data Queue is empty");
     }

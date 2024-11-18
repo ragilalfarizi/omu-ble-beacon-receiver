@@ -98,3 +98,22 @@ void printBLEHex(std::string& serviceData, size_t length) {
   }
   Serial.println();
 }
+
+void printBeaconData(const BeaconData_t& data) {
+  Serial.printf("==================\n");
+  Serial.printf(
+      "Beacon ID: %s\n",
+      data.ID.c_str());  // Print the ID (String -> c_str() for printf)
+  Serial.printf("Voltage Supply: %.2f V\n",
+                data.voltageSupply);  // Print voltage supply as float
+  Serial.printf("GPS Status: %c\n",
+                data.gps.status);  // Print GPS status as integer
+  Serial.printf(
+      "Longitude: %.6f\n",
+      data.gps.longitude);  // Print longitude as float with 6 decimals
+  Serial.printf("Latitude: %.6f\n",
+                data.gps.latitude);  // Print latitude as float with 6 decimals
+  Serial.printf("Hour Meter: %lu\n",
+                data.hourMeter);  // Print hour meter as unsigned long
+  Serial.printf("==================\n");
+}
