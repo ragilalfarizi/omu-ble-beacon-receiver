@@ -1,21 +1,24 @@
 #include <Arduino.h>
 #include <NimBLEDevice.h>
 
-int16_t analogInputFixedPoint = 0;  // Stores the fixed-point value received
-float analogInputVal =
-    0.0;  // Stores the floating-point value converted from fixed-point
+#include <vector>
 
-struct GPSData_s {
-  double longitude;
-  double latitude;
-  char status;
-};
+#include "common.h"
 
-struct BeaconData_t {
-  GPSData_s gps;
-  float voltageSupply;
-  time_t hourMeter;
-};
+// int16_t analogInputFixedPoint = 0;  // Stores the fixed-point value received
+// float analogInputVal =
+//     0.0;  // Stores the floating-point value converted from fixed-point
+
+/* GLOBAL VARIABLES */
+std::vector<BeaconData_t> detectedDevices;
+
+/* FORWARD DECLARATION FOR FUNCTIONS */
+void BLEReceiver(void* pvParameter);
+void RS485Comm(void* pvParameter);
+
+/* TASK HANDLER DECLARATION */
+TaskHandle_t BLEHandler   = NULL;
+TaskHandle_t RS485Handler = NULL;
 
 void decodeBeaconData(char beacon_data[19], BeaconData_t& decodedData) {
   // Decode the voltage supply
@@ -81,6 +84,15 @@ class MyAdvertisedDeviceCallbacks : public NimBLEAdvertisedDeviceCallbacks {
 void setup() {
   Serial.begin(9600);
 
+  xTaskCreatePinnedToCore(BLEReceiver, "BLE Receiver", 4096, NULL, 3,
+                          &BLEHandler, 0);
+  // xTaskCreatePinnedToCore(RS485Comm, "RS485 Comm", 4096, NULL, 3,
+  // &RS485Handler, 1);
+}
+
+void loop() {}
+
+void BLEReceiver(void* pvParameter) {
   // Initialize NimBLE
   NimBLEDevice::init("");
 
@@ -94,9 +106,16 @@ void setup() {
   // Start scanning for BLE devices
   pBLEScan->setActiveScan(true);
   pBLEScan->start(30, false);  // Scanning for 30 seconds
+
+  while (1) {
+    // do nothing perhaps?
+  }
 }
 
-void loop() {
-  // BLE scanning and callbacks are handled in the background by NimBLE.
-  delay(1000);
+void RS485Comm(void* pvParameter) {
+  // Initialize RS485
+
+  while (1) {
+    // do nothing perhaps?
+  }
 }
