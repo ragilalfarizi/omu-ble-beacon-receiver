@@ -1,13 +1,12 @@
 #include <Arduino.h>
 #include <NimBLEDevice.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/queue.h>
+#include <freertos/semphr.h>
 
 #include <vector>
 
 #include "common.h"
-
-// int16_t analogInputFixedPoint = 0;  // Stores the fixed-point value received
-// float analogInputVal =
-//     0.0;  // Stores the floating-point value converted from fixed-point
 
 /* GLOBAL VARIABLES */
 std::vector<BeaconData_t> detectedDevices;
@@ -15,10 +14,14 @@ std::vector<BeaconData_t> detectedDevices;
 /* FORWARD DECLARATION FOR FUNCTIONS */
 void BLEReceiver(void* pvParameter);
 void RS485Comm(void* pvParameter);
+static void printBLEHex(std::string& serviceData, size_t length);
 
 /* TASK HANDLER DECLARATION */
 TaskHandle_t BLEHandler   = NULL;
 TaskHandle_t RS485Handler = NULL;
+
+/* QUEUES AND SEMAPHORE DECLARATION */
+QueueHandle_t beaconRawData_Q;
 
 void decodeBeaconData(char beacon_data[19], BeaconData_t& decodedData) {
   // Decode the voltage supply
@@ -48,41 +51,52 @@ void decodeBeaconData(char beacon_data[19], BeaconData_t& decodedData) {
 
 // NimBLE callback to process the received advertisement data
 class MyAdvertisedDeviceCallbacks : public NimBLEAdvertisedDeviceCallbacks {
-  void onResult(NimBLEAdvertisedDevice* advertisedDevice) {
+  void onResult(NimBLEAdvertisedDevice* advertisedDevice) override {
+    // Filter by Service UUID
+    if (!advertisedDevice->isAdvertisingService(BLEUUID((uint16_t)0xFEAA))) {
+      return;  // Ignore non-matching services
+    }
+
+    // Check for service data
     if (advertisedDevice->haveServiceData()) {
-      // Get service data
       std::string serviceData = advertisedDevice->getServiceData();
 
-      // Ensure the service data is the correct size (15 bytes in your case)
-      if (serviceData.length() == 19) {
-        // Copy the service data into a char array for decoding
-        char beacon_data[19];
-        memcpy(beacon_data, serviceData.data(), 19);
-        Serial.println(beacon_data);
+      // Ensure service data length matches expected
+      if (serviceData.length() == BEACON_DATA_CHAR_SIZE) {
+        char beacon_data[BEACON_DATA_CHAR_SIZE];
+        memcpy(beacon_data, serviceData.data(), BEACON_DATA_CHAR_SIZE);
 
-        // Create a BeaconData_t structure to hold the decoded values
-        BeaconData_t data;
+        // UNCOMMENT TO DEBUG
+        // printBLEHex(serviceData, serviceData.length());
 
-        // Call your decode function to extract the data
-        decodeBeaconData(beacon_data, data);
+        // Send to Queue
+        if (xQueueSend(beaconRawData_Q, &beacon_data, pdMS_TO_TICKS(100)) ==
+            pdPASS) {
+          Serial.println("Raw BLE Data is sent to Queue");
+        } else {
+          Serial.println("Raw BLE Data Queue is full");
+        }
 
-        // Print out the decoded data
-        Serial.printf("============================================\n");
-        Serial.printf("GPS STATUS\t\t= %c\n", data.gps.status);
-        Serial.printf("GPS LATITUDE\t\t= %.6f\n", data.gps.latitude);
-        Serial.printf("GPS LONGITUDE\t\t= %.6f\n", data.gps.longitude);
-        Serial.printf("Analog Input\t\t= %.2f V\n", data.voltageSupply);
-        Serial.printf("Hour Meter\t\t= %ld s\n", data.hourMeter);
-        Serial.printf("============================================\n");
       } else {
-        Serial.println("Invalid service data size");
+        Serial.printf("[BLE] Invalid service data size: %d bytes\n",
+                      serviceData.length());
       }
+    } else {
+      Serial.println("[BLE] No service data found in this advertisement.");
     }
   }
 };
 
 void setup() {
+  /* SERIAL INIT */
   Serial.begin(9600);
+
+  /* QUEUES AND SEMAPHORE INIT */
+  beaconRawData_Q = xQueueCreate(10, sizeof(char) * BEACON_DATA_CHAR_SIZE);
+  if (beaconRawData_Q == nullptr) {
+    Serial.println("[Error] Failed to create BLE data queue!");
+    return;
+  }
 
   xTaskCreatePinnedToCore(BLEReceiver, "BLE Receiver", 4096, NULL, 3,
                           &BLEHandler, 0);
@@ -102,13 +116,17 @@ void BLEReceiver(void* pvParameter) {
   // Set the callback for processing the received advertising data
   pBLEScan->setAdvertisedDeviceCallbacks(new MyAdvertisedDeviceCallbacks(),
                                          true);
-
-  // Start scanning for BLE devices
+  // Configure scanning options
   pBLEScan->setActiveScan(true);
-  pBLEScan->start(30, false);  // Scanning for 30 seconds
+  pBLEScan->setInterval(100);  // Scanning interval (in milliseconds)
+  pBLEScan->setWindow(50);     // Scanning window (in milliseconds)
+
+  // Start scanning in continuous mode
+  pBLEScan->start(0, nullptr);  // 0 = Scan indefinitely
 
   while (1) {
-    // do nothing perhaps?
+    // The task runs indefinitely while BLE scanning happens in the background
+    vTaskDelay(pdMS_TO_TICKS(1000));  // Optional delay to free CPU time
   }
 }
 
@@ -118,4 +136,12 @@ void RS485Comm(void* pvParameter) {
   while (1) {
     // do nothing perhaps?
   }
+}
+
+static void printBLEHex(std::string& serviceData, size_t length) {
+  Serial.print("[BLE] Service Data (Hex): ");
+  for (size_t i = 0; i < length; i++) {
+    Serial.printf("%02X ", (uint8_t)serviceData[i]);
+  }
+  Serial.println();
 }
