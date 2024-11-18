@@ -18,7 +18,7 @@ void MyAdvertisedDeviceCallbacks::onResult(
       memcpy(beacon_data, serviceData.data(), BEACON_DATA_CHAR_SIZE);
 
       // UNCOMMENT TO DEBUG
-      printBLEHex(serviceData, serviceData.length());
+      //   printBLEHex(serviceData, serviceData.length());
 
       // Send to Queue
       if (xQueueSend(beaconRawData_Q, &beacon_data, pdMS_TO_TICKS(100)) ==
@@ -37,30 +37,58 @@ void MyAdvertisedDeviceCallbacks::onResult(
   }
 }
 
-void decodeBeaconData(char beacon_data[19], BeaconData_t& decodedData) {
-  // Decode the voltage supply
-  uint16_t volt = ((uint16_t)beacon_data[3] << 8) | (uint16_t)beacon_data[4];
-  decodedData.voltageSupply = volt / 1000.0;  // Convert from mV to volts
+BeaconData_t decodeBeaconData(char (&beacon_data)[19]) {
+  BeaconData_t data;
 
-  // Decode the GPS status
-  decodedData.gps.status = beacon_data[6];
+  /* DECODE ID */
+  // Extract List ID (first byte)
+  ListID_t listID = static_cast<ListID_t>(beacon_data[0]);
+  data.ID         = getListIDString(listID);  // Map List ID to string
 
-  // Decode the longitude
-  int32_t longitudeFixedPoint =
-      ((int32_t)beacon_data[7] << 24) | ((int32_t)beacon_data[8] << 16) |
-      ((int32_t)beacon_data[9] << 8) | (int32_t)beacon_data[10];
-  decodedData.gps.longitude = longitudeFixedPoint / 256.0;  // Convert to double
+  // Extract Beacon Number (next 2 bytes)
+  uint16_t beaconNumber = (static_cast<uint16_t>(beacon_data[1]) << 8) |
+                          static_cast<uint16_t>(beacon_data[2]);
 
-  // Decode the latitude
-  int32_t latitudeFixedPoint =
-      ((int32_t)beacon_data[11] << 24) | ((int32_t)beacon_data[12] << 16) |
-      ((int32_t)beacon_data[13] << 8) | (int32_t)beacon_data[14];
-  decodedData.gps.latitude = latitudeFixedPoint / 256.0;  // Convert to double
+  // Convert beacon number to String and append to the List ID string
+  String beaconNumberStr = String(beaconNumber);
 
-  // Decode the hour meter (4 bytes)
-  decodedData.hourMeter =
-      ((uint32_t)beacon_data[15] << 24) | ((uint32_t)beacon_data[16] << 16) |
-      ((uint32_t)beacon_data[17] << 8) | (uint32_t)beacon_data[18];
+  // Ensure the number is 4 digits, prepend with zeroes if necessary
+  while (beaconNumberStr.length() < 4) {
+    beaconNumberStr = "0" + beaconNumberStr;
+  }
+
+  // Combine List ID and beacon number
+  data.ID = data.ID + beaconNumberStr;
+
+  /* DECODE VOLTAGE SUPPLY */
+  uint16_t volt = (static_cast<uint16_t>(beacon_data[3]) << 8) |
+                  static_cast<uint16_t>(beacon_data[4]);
+  data.voltageSupply = static_cast<float>(volt) / 1000.0f;  // Voltage in volts
+
+  /* DECODE GPS STATUS */
+  data.gps.status = static_cast<char>(beacon_data[6]);  // GPS status (byte 7)
+
+  /* DECODE GPS LONGITUDE */
+  int32_t longitudeFixedPoint = (static_cast<int32_t>(beacon_data[7]) << 24) |
+                                (static_cast<int32_t>(beacon_data[8]) << 16) |
+                                (static_cast<int32_t>(beacon_data[9]) << 8) |
+                                static_cast<int32_t>(beacon_data[10]);
+  data.gps.longitude = static_cast<float>(longitudeFixedPoint) / 256.0f;
+
+  /* DECODE GPS LATITUDE */
+  int32_t latitudeFixedPoint = (static_cast<int32_t>(beacon_data[11]) << 24) |
+                               (static_cast<int32_t>(beacon_data[12]) << 16) |
+                               (static_cast<int32_t>(beacon_data[13]) << 8) |
+                               static_cast<int32_t>(beacon_data[14]);
+  data.gps.latitude = static_cast<float>(latitudeFixedPoint) / 256.0f;
+
+  /* DECODE HOUR METER */
+  data.hourMeter = (static_cast<uint32_t>(beacon_data[15]) << 24) |
+                   (static_cast<uint32_t>(beacon_data[16]) << 16) |
+                   (static_cast<uint32_t>(beacon_data[17]) << 8) |
+                   static_cast<uint32_t>(beacon_data[18]);
+
+  return data;
 }
 
 void printBLEHex(std::string& serviceData, size_t length) {
