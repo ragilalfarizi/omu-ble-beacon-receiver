@@ -14,8 +14,12 @@ void MyAdvertisedDeviceCallbacks::onResult(
 
     // Ensure service data length matches expected
     if (serviceData.length() == BEACON_DATA_CHAR_SIZE) {
-      char beacon_data[BEACON_DATA_CHAR_SIZE];
+      // Allocate buffer to include RSSI
+      char beacon_data[BEACON_DATA_CHAR_SIZE + sizeof(int)];
       memcpy(beacon_data, serviceData.data(), BEACON_DATA_CHAR_SIZE);
+
+      int8_t rssi = advertisedDevice->getRSSI();
+      memcpy(beacon_data + BEACON_DATA_CHAR_SIZE, &rssi, sizeof(int8_t));
 
       // UNCOMMENT TO DEBUG
       // printBLEHex(serviceData, serviceData.length());
@@ -37,7 +41,12 @@ void MyAdvertisedDeviceCallbacks::onResult(
   }
 }
 
-BeaconData_t decodeBeaconData(char (&beacon_data)[19]) {
+BeaconData_t decodeBeaconData(const char* beacon_data, size_t size) {
+  if (size < BEACON_DATA_CHAR_SIZE + sizeof(int8_t)) {
+    Serial.println("Invalid beacon data size");
+    return {};
+  }
+
   BeaconData_t data;
 
   /* DECODE ID */
@@ -83,6 +92,9 @@ BeaconData_t decodeBeaconData(char (&beacon_data)[19]) {
                    (static_cast<uint32_t>(beacon_data[16]) << 16) |
                    (static_cast<uint32_t>(beacon_data[17]) << 8) |
                    static_cast<uint32_t>(beacon_data[18]);
+
+  /* DECODE RSSI */
+  data.rssi = static_cast<int8_t>(beacon_data[19]);
 
   return data;
 }

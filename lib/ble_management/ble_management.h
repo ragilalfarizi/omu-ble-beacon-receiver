@@ -19,7 +19,7 @@ class MyAdvertisedDeviceCallbacks : public NimBLEAdvertisedDeviceCallbacks {
   void onResult(NimBLEAdvertisedDevice* advertisedDevice) override;
 };
 
-BeaconData_t decodeBeaconData(char (&beacon_data)[19]);
+BeaconData_t decodeBeaconData(const char* beacon_data, size_t size);
 
 void printBLEHex(std::string& serviceData, size_t length);
 

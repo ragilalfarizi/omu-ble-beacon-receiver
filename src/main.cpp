@@ -38,7 +38,8 @@ void setup() {
   Serial.begin(9600);
 
   /* QUEUES AND SEMAPHORE INIT */
-  beaconRawData_Q = xQueueCreate(10, sizeof(char) * BEACON_DATA_CHAR_SIZE);
+  beaconRawData_Q =
+      xQueueCreate(10, sizeof(char) * BEACON_DATA_CHAR_SIZE + sizeof(int8_t));
   if (beaconRawData_Q == nullptr) {
     Serial.println("[Error] Failed to create BLE data queue!");
     return;
@@ -91,13 +92,12 @@ void RS485Comm(void* pvParameter) {
 }
 
 void dataProcessing(void* pvParameter) {
-  char buffer[19];
+  char buffer[BEACON_DATA_CHAR_SIZE + sizeof(int8_t)];
   BeaconData_t data;
 
   while (1) {
     if (xQueueReceive(beaconRawData_Q, buffer, pdMS_TO_TICKS(100)) == pdPASS) {
-      // TODO: Decode
-      data = decodeBeaconData(buffer);
+      data = decodeBeaconData(buffer, sizeof(buffer));
 
       // UNCOMMENT TO PRINT DEBUG
       // printBeaconData(data);
@@ -141,10 +141,10 @@ void printBeaconDataMap(void* pvParameter) {
     for (const auto& entry : beaconDataMap) {
       Serial.printf(
           "ID: %s, Voltage: %.2f, GPS Status: %c, Longitude: %.6f, Latitude: "
-          "%.6f, Hour Meter: %d\n",
+          "%.6f, Hour Meter: %d, RSSI: %d\n",
           entry.second.ID.c_str(), entry.second.voltageSupply,
           entry.second.gps.status, entry.second.gps.longitude,
-          entry.second.gps.latitude, entry.second.hourMeter);
+          entry.second.gps.latitude, entry.second.hourMeter, entry.second.rssi);
     }
     Serial.println("=============================================");
 
