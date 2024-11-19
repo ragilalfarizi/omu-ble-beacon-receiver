@@ -1,86 +1,64 @@
 #include <Arduino.h>
 #include <NimBLEDevice.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/queue.h>
+#include <freertos/semphr.h>
 
-int16_t analogInputFixedPoint = 0;  // Stores the fixed-point value received
-float analogInputVal =
-    0.0;  // Stores the floating-point value converted from fixed-point
+#include <string>
+#include <unordered_map>
+#include <vector>
 
-struct GPSData_s {
-  double longitude;
-  double latitude;
-  char status;
-};
+#include "ble_management.h"
+#include "common.h"
 
-struct BeaconData_t {
-  GPSData_s gps;
-  float voltageSupply;
-  time_t hourMeter;
-};
+/* GLOBAL VARIABLES */
+// std::vector<BeaconData_t> detectedDevices;
+std::unordered_map<std::string, BeaconData_t> beaconDataMap;
 
-void decodeBeaconData(char beacon_data[19], BeaconData_t& decodedData) {
-  // Decode the voltage supply
-  uint16_t volt = ((uint16_t)beacon_data[3] << 8) | (uint16_t)beacon_data[4];
-  decodedData.voltageSupply = volt / 1000.0;  // Convert from mV to volts
+/* FORWARD DECLARATION FOR FUNCTIONS */
+void BLEReceiver(void* pvParameter);
+void RS485Comm(void* pvParameter);
+void dataProcessing(void* pvParameter);
+void printBeaconDataMap(void* pvParameter);
+void cleanupBeaconDataMap(void* pvParameter);
+// void printBLEHex(std::string& serviceData, size_t length);
 
-  // Decode the GPS status
-  decodedData.gps.status = beacon_data[6];
+/* TASK HANDLER DECLARATION */
+TaskHandle_t BLEHandler                = NULL;
+TaskHandle_t dataProcessingHandler     = NULL;
+TaskHandle_t RS485Handler              = NULL;
+TaskHandle_t printBeaconDataMapHandler = NULL;
+TaskHandle_t cleanupDataMapHandler     = NULL;
 
-  // Decode the longitude
-  int32_t longitudeFixedPoint =
-      ((int32_t)beacon_data[7] << 24) | ((int32_t)beacon_data[8] << 16) |
-      ((int32_t)beacon_data[9] << 8) | (int32_t)beacon_data[10];
-  decodedData.gps.longitude = longitudeFixedPoint / 256.0;  // Convert to double
-
-  // Decode the latitude
-  int32_t latitudeFixedPoint =
-      ((int32_t)beacon_data[11] << 24) | ((int32_t)beacon_data[12] << 16) |
-      ((int32_t)beacon_data[13] << 8) | (int32_t)beacon_data[14];
-  decodedData.gps.latitude = latitudeFixedPoint / 256.0;  // Convert to double
-
-  // Decode the hour meter (4 bytes)
-  decodedData.hourMeter =
-      ((uint32_t)beacon_data[15] << 24) | ((uint32_t)beacon_data[16] << 16) |
-      ((uint32_t)beacon_data[17] << 8) | (uint32_t)beacon_data[18];
-}
-
-// NimBLE callback to process the received advertisement data
-class MyAdvertisedDeviceCallbacks : public NimBLEAdvertisedDeviceCallbacks {
-  void onResult(NimBLEAdvertisedDevice* advertisedDevice) {
-    if (advertisedDevice->haveServiceData()) {
-      // Get service data
-      std::string serviceData = advertisedDevice->getServiceData();
-
-      // Ensure the service data is the correct size (15 bytes in your case)
-      if (serviceData.length() == 19) {
-        // Copy the service data into a char array for decoding
-        char beacon_data[19];
-        memcpy(beacon_data, serviceData.data(), 19);
-        Serial.println(beacon_data);
-
-        // Create a BeaconData_t structure to hold the decoded values
-        BeaconData_t data;
-
-        // Call your decode function to extract the data
-        decodeBeaconData(beacon_data, data);
-
-        // Print out the decoded data
-        Serial.printf("============================================\n");
-        Serial.printf("GPS STATUS\t\t= %c\n", data.gps.status);
-        Serial.printf("GPS LATITUDE\t\t= %.6f\n", data.gps.latitude);
-        Serial.printf("GPS LONGITUDE\t\t= %.6f\n", data.gps.longitude);
-        Serial.printf("Analog Input\t\t= %.2f V\n", data.voltageSupply);
-        Serial.printf("Hour Meter\t\t= %ld s\n", data.hourMeter);
-        Serial.printf("============================================\n");
-      } else {
-        Serial.println("Invalid service data size");
-      }
-    }
-  }
-};
+/* QUEUES AND SEMAPHORE DECLARATION */
+QueueHandle_t beaconRawData_Q;
 
 void setup() {
+  /* SERIAL INIT */
   Serial.begin(9600);
 
+  /* QUEUES AND SEMAPHORE INIT */
+  beaconRawData_Q = xQueueCreate(10, sizeof(char) * BEACON_DATA_CHAR_SIZE);
+  if (beaconRawData_Q == nullptr) {
+    Serial.println("[Error] Failed to create BLE data queue!");
+    return;
+  }
+
+  xTaskCreatePinnedToCore(BLEReceiver, "BLE Receiver", 4096, NULL, 3,
+                          &BLEHandler, 0);
+  xTaskCreatePinnedToCore(dataProcessing, "Data Processing", 4096, NULL, 3,
+                          &dataProcessingHandler, 1);
+  xTaskCreatePinnedToCore(printBeaconDataMap, "print Beacon Map", 4096, NULL, 3,
+                          &printBeaconDataMapHandler, 1);
+  xTaskCreatePinnedToCore(cleanupBeaconDataMap, "clean up Beacon Map", 4096,
+                          NULL, 3, &printBeaconDataMapHandler, 1);
+  // xTaskCreatePinnedToCore(RS485Comm, "RS485 Comm", 4096, NULL, 3,
+  // &RS485Handler, 1);
+}
+
+void loop() {}
+
+void BLEReceiver(void* pvParameter) {
   // Initialize NimBLE
   NimBLEDevice::init("");
 
@@ -90,13 +68,108 @@ void setup() {
   // Set the callback for processing the received advertising data
   pBLEScan->setAdvertisedDeviceCallbacks(new MyAdvertisedDeviceCallbacks(),
                                          true);
-
-  // Start scanning for BLE devices
+  // Configure scanning options
   pBLEScan->setActiveScan(true);
-  pBLEScan->start(30, false);  // Scanning for 30 seconds
+  pBLEScan->setInterval(100);  // Scanning interval (in milliseconds)
+  pBLEScan->setWindow(50);     // Scanning window (in milliseconds)
+
+  // Start scanning in continuous mode
+  pBLEScan->start(0, nullptr);  // 0 = Scan indefinitely
+
+  while (1) {
+    // The task runs indefinitely while BLE scanning happens in the background
+    vTaskDelay(pdMS_TO_TICKS(1000));  // Optional delay to free CPU time
+  }
 }
 
-void loop() {
-  // BLE scanning and callbacks are handled in the background by NimBLE.
-  delay(1000);
+void RS485Comm(void* pvParameter) {
+  // Initialize RS485
+
+  while (1) {
+    // do nothing perhaps?
+  }
+}
+
+void dataProcessing(void* pvParameter) {
+  char buffer[19];
+  BeaconData_t data;
+
+  while (1) {
+    if (xQueueReceive(beaconRawData_Q, buffer, pdMS_TO_TICKS(100)) == pdPASS) {
+      // TODO: Decode
+      data = decodeBeaconData(buffer);
+
+      // UNCOMMENT TO PRINT DEBUG
+      // printBeaconData(data);
+
+      // Get the current time in milliseconds
+      uint32_t currentTime = millis();
+      data.lastSeen        = currentTime;
+
+      // TODO: add to unordered map. (NO DUPLICATE. UPDATE IF THE SAME KEY EXIST
+      // BUT THE REST OF DATA IS CHANGING)
+
+      // Check if the ID already exists in the unordered map
+      auto it = beaconDataMap.find(data.ID);
+
+      if (it != beaconDataMap.end()) {
+        // If found, update the data
+        it->second = data;
+        Serial.printf("Updated Beacon Data with ID: %s\n", data.ID.c_str());
+      } else {
+        // If not found, insert the new data
+        beaconDataMap[data.ID] = data;
+        Serial.printf("Inserted new Beacon Data with ID: %s\n",
+                      data.ID.c_str());
+      }
+
+    } else {
+      Serial.println("Beacon Raw Data Queue is empty");
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(10));
+  }
+}
+
+void printBeaconDataMap(void* pvParameter) {
+  while (1) {
+    // Print the number of objects in the map
+    Serial.printf("Total Beacon Data entries: %d\n", beaconDataMap.size());
+
+    // Iterate over the unordered map and print each entry
+    Serial.println("=============================================");
+    for (const auto& entry : beaconDataMap) {
+      Serial.printf(
+          "ID: %s, Voltage: %.2f, GPS Status: %c, Longitude: %.6f, Latitude: "
+          "%.6f, Hour Meter: %d\n",
+          entry.second.ID.c_str(), entry.second.voltageSupply,
+          entry.second.gps.status, entry.second.gps.longitude,
+          entry.second.gps.latitude, entry.second.hourMeter);
+    }
+    Serial.println("=============================================");
+
+    // Delay for a while before printing again (e.g., 5 seconds)
+    vTaskDelay(pdMS_TO_TICKS(5000));
+  }
+}
+
+void cleanupBeaconDataMap(void* pvParameter) {
+  const uint32_t timeoutInterval = 10000;  // 10 seconds
+  while (1) {
+    uint32_t currentTime = millis();
+
+    // Iterate over the map and remove stale entries
+    for (auto it = beaconDataMap.begin(); it != beaconDataMap.end();) {
+      if ((currentTime - it->second.lastSeen) > timeoutInterval) {
+        Serial.printf("Removing stale Beacon Data with ID: %s\n",
+                      it->second.ID.c_str());
+        it = beaconDataMap.erase(it);  // Remove and advance iterator
+      } else {
+        ++it;  // Advance iterator
+      }
+    }
+
+    // Delay the cleanup task (e.g., run every 5 seconds)
+    vTaskDelay(pdMS_TO_TICKS(5000));
+  }
 }
