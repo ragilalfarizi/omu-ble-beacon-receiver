@@ -5,6 +5,10 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 
+#include <iomanip>
+#include <sstream>
+#include <string>
+
 #include "common.h"
 #include "id_management.h"
 

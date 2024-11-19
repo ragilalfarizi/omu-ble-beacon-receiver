@@ -11,7 +11,7 @@ struct GPSData_t {
 };
 
 struct BeaconData_t {
-  String ID;
+  std::string ID;
   GPSData_t gps;
   float voltageSupply;
   time_t hourMeter;

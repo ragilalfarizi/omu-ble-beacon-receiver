@@ -33,7 +33,7 @@ ListID_t stringToEnum(const std::string &id) {
 }
 
 // String getListIDString(ListID_t id) {
-String getListIDString(ListID_t id) {
+std::string getListIDString(ListID_t id) {
   switch (id) {
     case AC:
       return "AC";

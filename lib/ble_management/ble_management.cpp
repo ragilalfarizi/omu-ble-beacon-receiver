@@ -18,7 +18,7 @@ void MyAdvertisedDeviceCallbacks::onResult(
       memcpy(beacon_data, serviceData.data(), BEACON_DATA_CHAR_SIZE);
 
       // UNCOMMENT TO DEBUG
-      //   printBLEHex(serviceData, serviceData.length());
+      // printBLEHex(serviceData, serviceData.length());
 
       // Send to Queue
       if (xQueueSend(beaconRawData_Q, &beacon_data, pdMS_TO_TICKS(100)) ==
@@ -49,16 +49,12 @@ BeaconData_t decodeBeaconData(char (&beacon_data)[19]) {
   uint16_t beaconNumber = (static_cast<uint16_t>(beacon_data[1]) << 8) |
                           static_cast<uint16_t>(beacon_data[2]);
 
-  // Convert beacon number to String and append to the List ID string
-  String beaconNumberStr = String(beaconNumber);
-
-  // Ensure the number is 4 digits, prepend with zeroes if necessary
-  while (beaconNumberStr.length() < 4) {
-    beaconNumberStr = "0" + beaconNumberStr;
-  }
+  // Format the beacon number as a 4-digit string
+  std::ostringstream beaconNumberStr;
+  beaconNumberStr << std::setw(4) << std::setfill('0') << beaconNumber;
 
   // Combine List ID and beacon number
-  data.ID = data.ID + beaconNumberStr;
+  data.ID += beaconNumberStr.str();
 
   /* DECODE VOLTAGE SUPPLY */
   uint16_t volt = (static_cast<uint16_t>(beacon_data[3]) << 8) |

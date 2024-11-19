@@ -4,6 +4,7 @@
 #include <freertos/queue.h>
 #include <freertos/semphr.h>
 
+#include <string>
 #include <unordered_map>
 #include <vector>
 
@@ -11,20 +12,21 @@
 #include "common.h"
 
 /* GLOBAL VARIABLES */
-std::vector<BeaconData_t> detectedDevices;
-// std::unordered_map<String, BeaconData_t> beaconDataMap;
+// std::vector<BeaconData_t> detectedDevices;
+std::unordered_map<std::string, BeaconData_t> beaconDataMap;
 
 /* FORWARD DECLARATION FOR FUNCTIONS */
 void BLEReceiver(void* pvParameter);
 void RS485Comm(void* pvParameter);
 void dataProcessing(void* pvParameter);
+void printBeaconDataMap(void* pvParameter);
 // void printBLEHex(std::string& serviceData, size_t length);
 
 /* TASK HANDLER DECLARATION */
-TaskHandle_t BLEHandler            = NULL;
-TaskHandle_t dataProcessingHandler = NULL;
-TaskHandle_t RS485Handler          = NULL;
-TaskHandle_t printUnorderedMap     = NULL;
+TaskHandle_t BLEHandler                = NULL;
+TaskHandle_t dataProcessingHandler     = NULL;
+TaskHandle_t RS485Handler              = NULL;
+TaskHandle_t printBeaconDataMapHandler = NULL;
 
 /* QUEUES AND SEMAPHORE DECLARATION */
 QueueHandle_t beaconRawData_Q;
@@ -44,6 +46,8 @@ void setup() {
                           &BLEHandler, 0);
   xTaskCreatePinnedToCore(dataProcessing, "Data Processing", 4096, NULL, 3,
                           &dataProcessingHandler, 1);
+  xTaskCreatePinnedToCore(printBeaconDataMap, "print Beacon Map", 4096, NULL, 3,
+                          &printBeaconDataMapHandler, 1);
   // xTaskCreatePinnedToCore(RS485Comm, "RS485 Comm", 4096, NULL, 3,
   // &RS485Handler, 1);
 }
@@ -91,13 +95,48 @@ void dataProcessing(void* pvParameter) {
       // TODO: Decode
       data = decodeBeaconData(buffer);
 
+      // UNCOMMENT TO PRINT DEBUG
+      // printBeaconData(data);
+
       // TODO: add to unordered map. (NO DUPLICATE. UPDATE IF THE SAME KEY EXIST
       // BUT THE REST OF DATA IS CHANGING)
 
-      // UNCOMMENT TO PRINT DEBUG
-      // printBeaconData(data);
+      // Check if the ID already exists in the unordered map
+      auto it = beaconDataMap.find(data.ID);
+
+      if (it != beaconDataMap.end()) {
+        // If found, update the data
+        it->second = data;
+        Serial.printf("Updated Beacon Data with ID: %s\n", data.ID.c_str());
+      } else {
+        // If not found, insert the new data
+        beaconDataMap[data.ID] = data;
+        Serial.printf("Inserted new Beacon Data with ID: %s\n",
+                      data.ID.c_str());
+      }
+
     } else {
       Serial.println("Beacon Raw Data Queue is empty");
     }
+  }
+}
+
+void printBeaconDataMap(void* pvParameter) {
+  while (1) {
+    // Print the number of objects in the map
+    Serial.printf("Total Beacon Data entries: %d\n", beaconDataMap.size());
+
+    // Iterate over the unordered map and print each entry
+    for (const auto& entry : beaconDataMap) {
+      Serial.printf(
+          "ID: %s, Voltage: %.2f, GPS Status: %c, Longitude: %.6f, Latitude: "
+          "%.6f, Hour Meter: %d\n",
+          entry.second.ID.c_str(), entry.second.voltageSupply,
+          entry.second.gps.status, entry.second.gps.longitude,
+          entry.second.gps.latitude, entry.second.hourMeter);
+    }
+
+    // Delay for a while before printing again (e.g., 5 seconds)
+    vTaskDelay(pdMS_TO_TICKS(5000));
   }
 }
