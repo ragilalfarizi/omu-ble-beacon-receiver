@@ -16,4 +16,5 @@ struct BeaconData_t {
   float voltageSupply;
   time_t hourMeter;
   int8_t rssi;
+  uint32_t lastSeen;
 };

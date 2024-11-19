@@ -20,6 +20,7 @@ void BLEReceiver(void* pvParameter);
 void RS485Comm(void* pvParameter);
 void dataProcessing(void* pvParameter);
 void printBeaconDataMap(void* pvParameter);
+void cleanupBeaconDataMap(void* pvParameter);
 // void printBLEHex(std::string& serviceData, size_t length);
 
 /* TASK HANDLER DECLARATION */
@@ -27,6 +28,7 @@ TaskHandle_t BLEHandler                = NULL;
 TaskHandle_t dataProcessingHandler     = NULL;
 TaskHandle_t RS485Handler              = NULL;
 TaskHandle_t printBeaconDataMapHandler = NULL;
+TaskHandle_t cleanupDataMapHandler     = NULL;
 
 /* QUEUES AND SEMAPHORE DECLARATION */
 QueueHandle_t beaconRawData_Q;
@@ -48,6 +50,8 @@ void setup() {
                           &dataProcessingHandler, 1);
   xTaskCreatePinnedToCore(printBeaconDataMap, "print Beacon Map", 4096, NULL, 3,
                           &printBeaconDataMapHandler, 1);
+  xTaskCreatePinnedToCore(cleanupBeaconDataMap, "clean up Beacon Map", 4096,
+                          NULL, 3, &printBeaconDataMapHandler, 1);
   // xTaskCreatePinnedToCore(RS485Comm, "RS485 Comm", 4096, NULL, 3,
   // &RS485Handler, 1);
 }
@@ -98,6 +102,10 @@ void dataProcessing(void* pvParameter) {
       // UNCOMMENT TO PRINT DEBUG
       // printBeaconData(data);
 
+      // Get the current time in milliseconds
+      uint32_t currentTime = millis();
+      data.lastSeen        = currentTime;
+
       // TODO: add to unordered map. (NO DUPLICATE. UPDATE IF THE SAME KEY EXIST
       // BUT THE REST OF DATA IS CHANGING)
 
@@ -118,6 +126,8 @@ void dataProcessing(void* pvParameter) {
     } else {
       Serial.println("Beacon Raw Data Queue is empty");
     }
+
+    vTaskDelay(pdMS_TO_TICKS(10));
   }
 }
 
@@ -127,6 +137,7 @@ void printBeaconDataMap(void* pvParameter) {
     Serial.printf("Total Beacon Data entries: %d\n", beaconDataMap.size());
 
     // Iterate over the unordered map and print each entry
+    Serial.println("=============================================");
     for (const auto& entry : beaconDataMap) {
       Serial.printf(
           "ID: %s, Voltage: %.2f, GPS Status: %c, Longitude: %.6f, Latitude: "
@@ -135,8 +146,30 @@ void printBeaconDataMap(void* pvParameter) {
           entry.second.gps.status, entry.second.gps.longitude,
           entry.second.gps.latitude, entry.second.hourMeter);
     }
+    Serial.println("=============================================");
 
     // Delay for a while before printing again (e.g., 5 seconds)
+    vTaskDelay(pdMS_TO_TICKS(5000));
+  }
+}
+
+void cleanupBeaconDataMap(void* pvParameter) {
+  const uint32_t timeoutInterval = 10000;  // 10 seconds
+  while (1) {
+    uint32_t currentTime = millis();
+
+    // Iterate over the map and remove stale entries
+    for (auto it = beaconDataMap.begin(); it != beaconDataMap.end();) {
+      if ((currentTime - it->second.lastSeen) > timeoutInterval) {
+        Serial.printf("Removing stale Beacon Data with ID: %s\n",
+                      it->second.ID.c_str());
+        it = beaconDataMap.erase(it);  // Remove and advance iterator
+      } else {
+        ++it;  // Advance iterator
+      }
+    }
+
+    // Delay the cleanup task (e.g., run every 5 seconds)
     vTaskDelay(pdMS_TO_TICKS(5000));
   }
 }
