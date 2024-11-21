@@ -8,14 +8,16 @@
 #include <unordered_map>
 #include <vector>
 
+#include "ProtocolAA55.h"
 #include "ble_management.h"
 #include "common.h"
-#include "ProtocolAA55.h"
 #include "gps.h"
 
 /* GLOBAL VARIABLES */
 // std::vector<BeaconData_t> detectedDevices;
 std::unordered_map<std::string, BeaconData_t> beaconDataMap;
+GPS* gps;
+GPSData_t masterGPS;
 
 /* FORWARD DECLARATION FOR FUNCTIONS */
 void BLEReceiver(void* pvParameter);
@@ -23,6 +25,7 @@ void RS485Comm(void* pvParameter);
 void dataProcessing(void* pvParameter);
 void printBeaconDataMap(void* pvParameter);
 void cleanupBeaconDataMap(void* pvParameter);
+void retrieveGPSData(void* pvParam);
 // void printBLEHex(std::string& serviceData, size_t length);
 
 /* TASK HANDLER DECLARATION */
@@ -31,6 +34,7 @@ TaskHandle_t dataProcessingHandler     = NULL;
 TaskHandle_t RS485Handler              = NULL;
 TaskHandle_t printBeaconDataMapHandler = NULL;
 TaskHandle_t cleanupDataMapHandler     = NULL;
+TaskHandle_t retrieveGPSHandler        = NULL;
 
 /* QUEUES AND SEMAPHORE DECLARATION */
 QueueHandle_t beaconRawData_Q;
@@ -38,6 +42,13 @@ QueueHandle_t beaconRawData_Q;
 void setup() {
   /* SERIAL INIT */
   Serial.begin(9600);
+
+  /* GPS INIT */
+  Serial.println("[GPS] Inisialisasi GPS");
+  gps                 = new GPS();
+  masterGPS.latitude  = 0;
+  masterGPS.longitude = 0;
+  masterGPS.status    = 'V';
 
   /* QUEUES AND SEMAPHORE INIT */
   beaconRawData_Q =
@@ -55,6 +66,8 @@ void setup() {
                           &printBeaconDataMapHandler, 1);
   xTaskCreatePinnedToCore(cleanupBeaconDataMap, "clean up Beacon Map", 4096,
                           NULL, 3, &printBeaconDataMapHandler, 1);
+  xTaskCreatePinnedToCore(retrieveGPSData, "get GPS Data", 4096, NULL, 4,
+                          &retrieveGPSHandler, 0);
   // xTaskCreatePinnedToCore(RS485Comm, "RS485 Comm", 4096, NULL, 3,
   // &RS485Handler, 1);
 }
@@ -173,5 +186,39 @@ void cleanupBeaconDataMap(void* pvParameter) {
 
     // Delay the cleanup task (e.g., run every 5 seconds)
     vTaskDelay(pdMS_TO_TICKS(5000));
+  }
+}
+
+void retrieveGPSData(void* pvParam) {
+  bool isValid = false;
+
+  while (1) {
+    Serial.println("[GPS] encoding...");
+
+    while (Serial.available() > 0) {
+      char gpsChar = Serial.read();
+      gps->encode(gpsChar);
+    }
+
+    isValid = gps->getValidation();
+
+    if ((gps->getCharProcessed()) < 10) {
+      Serial.println(
+          "[GPS] GPS module not sending data, check wiring or module power");
+      masterGPS.status = 'V';
+    } else {
+      if (isValid) {
+        // Serial.printf("[GPS] Latitude : %f\n", masterGPS.latitude);
+        // Serial.printf("[GPS] Longitude : %f\n", masterGPS.longitude);
+        Serial.printf("[GPS] Latitude : %f\n", gps->location.lat());
+        Serial.printf("[GPS] Longitude : %f\n", gps->location.lng());
+        masterGPS.status = 'A';
+      } else {
+        Serial.println("[GPS] GPS is searching for a signal...");
+        masterGPS.status = 'V';
+      }
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(2000));
   }
 }
