@@ -5,8 +5,8 @@
 #define BEACON_DATA_CHAR_SIZE 19
 
 struct GPSData_t {
-  double longitude;
-  double latitude;
+  float longitude;
+  float latitude;
   char status;
 };
 
