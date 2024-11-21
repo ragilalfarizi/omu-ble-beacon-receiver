@@ -186,16 +186,17 @@ void dataProcessing(void* pvParameter) {
         if (it != beaconDataMap.end()) {
           // If found, update the data
           it->second = data;
-          Serial.printf("Updated Beacon Data with ID: %s\n", data.ID.c_str());
+          // Serial.printf("Updated Beacon Data with ID: %s\n",
+          // data.ID.c_str());
         } else {
           // If not found, insert the new data
           beaconDataMap[data.ID] = data;
-          Serial.printf("Inserted new Beacon Data with ID: %s\n",
-                        data.ID.c_str());
+          // Serial.printf("Inserted new Beacon Data with ID: %s\n",
+          //               data.ID.c_str());
         }
 
       } else {
-        Serial.println("Beacon Raw Data Queue is empty");
+        // Serial.println("Beacon Raw Data Queue is empty");
       }
 
       xSemaphoreGive(beaconDataMutex);
