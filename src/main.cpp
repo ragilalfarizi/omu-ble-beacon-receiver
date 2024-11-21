@@ -155,7 +155,8 @@ void RS485Comm(void* pvParameter) {
       }
 
       // Send packet data
-      // protocol.SendDataBeacon(size, masterGPS, listDetectedBeacon);
+      protocol.SendDataBeacon(size, masterGPS, listDetectedBeacon);
+      Serial.println("Data is sent through RS485");
 
       xSemaphoreGive(beaconDataMutex);
     }
