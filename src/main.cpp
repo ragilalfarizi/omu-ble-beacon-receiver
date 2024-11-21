@@ -11,6 +11,7 @@
 #include "ble_management.h"
 #include "common.h"
 #include "ProtocolAA55.h"
+#include "gps.h"
 
 /* GLOBAL VARIABLES */
 // std::vector<BeaconData_t> detectedDevices;
