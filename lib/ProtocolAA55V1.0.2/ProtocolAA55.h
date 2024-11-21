@@ -7,7 +7,11 @@
 #include <stdio.h>
 
 #include "Arduino.h"
+#include "common.h"
 #include "configProtocolAA55.h"
+#include "time.h"
+
+#define PID_BEACON_DATA 0x01
 
 typedef enum {
   REFERENCE_DESTINATION_ID = 1,
@@ -68,6 +72,23 @@ typedef struct {
   double ProcessOutgoingOil;
 } OilTableProperties;
 
+// Commented out because it's conflicting with common.h
+// Use common.h instead
+// struct GPSData_t {
+//   float longitude;
+//   float latitude;
+//   char status;
+// };
+
+// struct BeaconData_t {
+//   std::string ID;
+//   GPSData_t gps;
+//   float voltageSupply;
+//   time_t hourMeter;
+//   int8_t rssi;
+//   uint32_t lastSeen;
+// };
+
 class ProtocolAA55 {
  public:
   // for creating an objec
@@ -78,11 +99,15 @@ class ProtocolAA55 {
              int8_t rxPin = -1, int8_t txPin = -1, bool invert = false);
 
   void configListeningReference(uint8_t _ListeningReference);
+  void configIDBeaconReceiver(std::string IDRecv_);
   void configDirPinForRS485(int8_t pinDir = -1);
 
   void getBusData();
   void sendDatatoBusLine(uint8_t destinationID, uint8_t *packet,
                          uint8_t *lenData);
+  void SendDataBeacon(uint8_t totalDetectedBeaocon_       = 0,
+                      GPSData_t receiverPosition_         = GPSData_t{},
+                      BeaconData_t listDetecetecBeacon_[] = nullptr);
 
   uint8_t getStatusOil(TypeOfOil _oilType);
   void getDateTransaction(TypeOfOil _oilType, char *dateInfo_);
@@ -98,6 +123,7 @@ class ProtocolAA55 {
  private:
   HardwareSerial *_hardwareSerial;
   OilTableProperties _OilTable[MAX_TYPE_OF_OIL];
+  std::string IDReceiver_;
   uint8_t _listeningRef;
   uint8_t _myID;
   uint8_t _dirPin;
@@ -115,6 +141,7 @@ class ProtocolAA55 {
   bool checkPIDData         = false;
   bool checkSourceData      = false;
 
+  uint32_t changeFloatToBytesFormat(float *value_);
   uint8_t ListeningData();
   void SendPayloadUart(uint8_t *buf, uint8_t size_, uint16_t delayMicrosec);
   uint8_t checkHeaderValueMiddleData(uint8_t *buffPacket, uint8_t *idx);

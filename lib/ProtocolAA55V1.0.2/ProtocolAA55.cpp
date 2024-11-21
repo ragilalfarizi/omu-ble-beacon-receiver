@@ -1,3 +1,25 @@
+/**
+ *
+ *  This libarary is only for supporting some devices which later will connect
+ * with RS485 bus line of QIm protocol Nothing special from the created protocol
+ * just a common one, construct with header and tail.
+ *
+ *  Since the connection need to wire as a multidrop device then ID destination
+ * and ID source where the message come from are added into protocol packet data
+ *
+ *  VERSION V.1.0.2
+ *
+ *  log version (supposed to be defined somehow here) :O
+ *  V.1.0.0 --> inlcude function to listen some busy line of RS485, this is
+ * dedicated for LCD display module V.1.0.1 --> some bug fix V.1.0.2 --> inlcude
+ * function to construct a beacon packet data this is dedicated for Beacon
+ * display module
+ *
+ *
+ *  BDO 2024
+ *  created: by Rteam
+ */
+
 #include "ProtocolAA55.h"
 
 /**
@@ -63,7 +85,7 @@ uint8_t ProtocolAA55::checkHeaderValueMiddleData(uint8_t *buffPacket,
     } else {
       (*idx) = (*idx) + 2;
       temp   = buffPacket[(*idx) - 1];
-      // Serial.printf("%02X\r\n", temp);
+      // Serial.printf(" $%02X", temp);
       return temp;
     }
   } else if (buffPacket[(*idx)] == identifyDiffTailData) {
@@ -73,13 +95,13 @@ uint8_t ProtocolAA55::checkHeaderValueMiddleData(uint8_t *buffPacket,
     } else {
       (*idx) = (*idx) + 2;
       temp   = buffPacket[(*idx) - 1];
-      // Serial.printf("%02X\r\n", temp);
+      // Serial.printf(" $%02X", temp);
       return temp;
     }
   } else {
     (*idx) = (*idx) + 1;
     temp   = buffPacket[(*idx) - 1];
-    // Serial.printf("%02X\r\n", temp);
+    // Serial.printf(" $%02X", temp);
     return temp;
   }
 }
@@ -149,6 +171,18 @@ bool ProtocolAA55::checksum_check(uint8_t startByte, uint8_t *buf,
     } else {
       return false;
     }
+  }
+}
+
+/**
+ * @brief function for converting float into byte format which fits with the
+ * defined protocol rules
+ */
+uint32_t ProtocolAA55::changeFloatToBytesFormat(float *value_) {
+  if ((*value_) < 0) {
+    return (uint32_t)abs((*value_) * 10000.0) | 0x80000000;
+  } else {
+    return (uint32_t)abs((*value_) * 10000.0);
   }
 }
 
@@ -378,6 +412,112 @@ void ProtocolAA55::sendDatatoBusLine(uint8_t destinationID, uint8_t *packet,
 }
 
 /**
+ * @brief function to create beacon packet data to match with a rs485 rules
+ * @return
+ */
+void ProtocolAA55::SendDataBeacon(uint8_t totalDetectedBeaocon_,
+                                  GPSData_t receiverPosition_,
+                                  BeaconData_t listDetecetecBeacon_[]) {
+  uint8_t idxArr       = 0;
+  uint32_t tempValue   = 0;
+  uint8_t tempValue8   = 0;
+  uint16_t tempValue16 = 0;
+
+  payloadUart[idxArr]   = 0x00;
+  payloadUart[++idxArr] = 0x00;
+  payloadUart[++idxArr] = PID_BEACON_DATA;
+
+  payloadUart[++idxArr] = addIdenfierWhenHeaderIsData(
+      (receiverPosition_.status), payloadUart, &idxArr);
+
+  tempValue = changeFloatToBytesFormat(&receiverPosition_.longitude);
+  payloadUart[++idxArr] = addIdenfierWhenHeaderIsData(
+      ((tempValue >> 24) & 0xFF), payloadUart, &idxArr);
+  payloadUart[++idxArr] = addIdenfierWhenHeaderIsData(
+      ((tempValue >> 16) & 0xFF), payloadUart, &idxArr);
+  payloadUart[++idxArr] = addIdenfierWhenHeaderIsData(((tempValue >> 8) & 0xFF),
+                                                      payloadUart, &idxArr);
+  payloadUart[++idxArr] = addIdenfierWhenHeaderIsData(((tempValue >> 0) & 0xFF),
+                                                      payloadUart, &idxArr);
+
+  tempValue             = changeFloatToBytesFormat(&receiverPosition_.latitude);
+  payloadUart[++idxArr] = addIdenfierWhenHeaderIsData(
+      ((tempValue >> 24) & 0xFF), payloadUart, &idxArr);
+  payloadUart[++idxArr] = addIdenfierWhenHeaderIsData(
+      ((tempValue >> 16) & 0xFF), payloadUart, &idxArr);
+  payloadUart[++idxArr] = addIdenfierWhenHeaderIsData(((tempValue >> 8) & 0xFF),
+                                                      payloadUart, &idxArr);
+  payloadUart[++idxArr] = addIdenfierWhenHeaderIsData(((tempValue >> 0) & 0xFF),
+                                                      payloadUart, &idxArr);
+
+  payloadUart[++idxArr] = addIdenfierWhenHeaderIsData((totalDetectedBeaocon_),
+                                                      payloadUart, &idxArr);
+
+  for (uint8_t xx8 = 0; xx8 < totalDetectedBeaocon_; xx8++) {
+    tempValue8 = listDetecetecBeacon_[xx8].ID.length();
+
+    for (uint8_t xx5 = 0; xx5 < tempValue8; xx5++) {
+      payloadUart[++idxArr] = addIdenfierWhenHeaderIsData(
+          (listDetecetecBeacon_[xx8].ID[xx5]), payloadUart, &idxArr);
+    }
+
+    payloadUart[++idxArr] = addIdenfierWhenHeaderIsData(
+        (listDetecetecBeacon_[xx8].gps.status), payloadUart, &idxArr);
+
+    tempValue =
+        changeFloatToBytesFormat(&listDetecetecBeacon_[xx8].gps.longitude);
+    payloadUart[++idxArr] = addIdenfierWhenHeaderIsData(
+        ((tempValue >> 24) & 0xFF), payloadUart, &idxArr);
+    payloadUart[++idxArr] = addIdenfierWhenHeaderIsData(
+        ((tempValue >> 16) & 0xFF), payloadUart, &idxArr);
+    payloadUart[++idxArr] = addIdenfierWhenHeaderIsData(
+        ((tempValue >> 8) & 0xFF), payloadUart, &idxArr);
+    payloadUart[++idxArr] = addIdenfierWhenHeaderIsData(
+        ((tempValue >> 0) & 0xFF), payloadUart, &idxArr);
+
+    tempValue =
+        changeFloatToBytesFormat(&listDetecetecBeacon_[xx8].gps.latitude);
+    payloadUart[++idxArr] = addIdenfierWhenHeaderIsData(
+        ((tempValue >> 24) & 0xFF), payloadUart, &idxArr);
+    payloadUart[++idxArr] = addIdenfierWhenHeaderIsData(
+        ((tempValue >> 16) & 0xFF), payloadUart, &idxArr);
+    payloadUart[++idxArr] = addIdenfierWhenHeaderIsData(
+        ((tempValue >> 8) & 0xFF), payloadUart, &idxArr);
+    payloadUart[++idxArr] = addIdenfierWhenHeaderIsData(
+        ((tempValue >> 0) & 0xFF), payloadUart, &idxArr);
+
+    payloadUart[++idxArr] = addIdenfierWhenHeaderIsData(
+        ((listDetecetecBeacon_[xx8].hourMeter >> 24) & 0xFF), payloadUart,
+        &idxArr);
+    payloadUart[++idxArr] = addIdenfierWhenHeaderIsData(
+        ((listDetecetecBeacon_[xx8].hourMeter >> 16) & 0xFF), payloadUart,
+        &idxArr);
+    payloadUart[++idxArr] = addIdenfierWhenHeaderIsData(
+        ((listDetecetecBeacon_[xx8].hourMeter >> 8) & 0xFF), payloadUart,
+        &idxArr);
+    payloadUart[++idxArr] = addIdenfierWhenHeaderIsData(
+        ((listDetecetecBeacon_[xx8].hourMeter) & 0xFF), payloadUart, &idxArr);
+
+    if (listDetecetecBeacon_[xx8].rssi < 0) {
+      tempValue16 = abs(listDetecetecBeacon_[xx8].rssi * 1) | 0x8000;
+    } else {
+      tempValue16 = abs(listDetecetecBeacon_[xx8].rssi * 1);
+    }
+    payloadUart[++idxArr] = addIdenfierWhenHeaderIsData(
+        ((tempValue16 >> 8) & 0xFF), payloadUart, &idxArr);
+    payloadUart[++idxArr] = addIdenfierWhenHeaderIsData(((tempValue16) & 0xFF),
+                                                        payloadUart, &idxArr);
+  }
+  checksum_calc(4, payloadUart, &idxArr);
+  payloadUart[0]        = 0xAA;
+  payloadUart[1]        = 0xAA;
+  payloadUart[++idxArr] = 0x55;
+  payloadUart[++idxArr] = 0x55;
+
+  SendPayloadUart(payloadUart, ++idxArr, 100);
+}
+
+/**
  * @brief public function that user use to get a specific data in the bus line
  * communication
  * @return
@@ -386,7 +526,9 @@ void ProtocolAA55::getBusData() {
   uint8_t statusData     = DATA_IDLE;
   uint8_t lengthInfoData = 0;
   uint8_t nextIndex      = 0;
+  uint8_t unusedDataByte = 0;
   uint16_t unusedData    = 0;
+  uint32_t unusedData32  = 0;
   uint8_t indexOilTable  = 0;
   bool enParsingData     = 0;
   statusData             = ListeningData();
@@ -394,6 +536,10 @@ void ProtocolAA55::getBusData() {
   // do some parsing here
   if (statusData == DATA_COMPLETE) {
     if (checksum_check(2, payloadUart, &UART_DataLength)) {
+#if (DEBUG_INTERNAL_LIB == 1)
+      Serial.println("\nNEW RECEIVE DATA\n");
+#endif
+
       // when master is connected to other devices as a source device
       if (payloadUart[1] == ID_MASTER) {
         if (payloadUart[0] == ID_DEV_LMS_1) {
@@ -429,9 +575,8 @@ void ProtocolAA55::getBusData() {
                   (checkHeaderValueMiddleData(payloadUart, &nextIndex) << 16) |
                   (checkHeaderValueMiddleData(payloadUart, &nextIndex) << 8) |
                   (checkHeaderValueMiddleData(payloadUart, &nextIndex))) &
-                 0xFFFFFFFF) *
+                 0xFFFFFFFF) +
                 (3600 * 7);
-            ;
 
 #if (DEBUG_INTERNAL_LIB == 1)
             Serial.printf("\nPRS7: %d ", _OilTable[indexOilTable].timestamp);
@@ -441,10 +586,12 @@ void ProtocolAA55::getBusData() {
 
             // unused data
             // -------------------------------------------------------------------------------------------------
-            unusedData =
-                ((checkHeaderValueMiddleData(payloadUart, &nextIndex) << 8) |
+            unusedData32 =
+                ((checkHeaderValueMiddleData(payloadUart, &nextIndex) << 24) |
+                 (checkHeaderValueMiddleData(payloadUart, &nextIndex) << 16) |
+                 (checkHeaderValueMiddleData(payloadUart, &nextIndex) << 8) |
                  (checkHeaderValueMiddleData(payloadUart, &nextIndex))) &
-                0xFFFF;
+                0xFFFFFFFF;
             //------------------------------------------------------------------------------------------------------------
 
             // get lubeman name
@@ -455,7 +602,7 @@ void ProtocolAA55::getBusData() {
               lengthInfoData = sizeof(_OilTable[indexOilTable].operatorName);
             }
 #if (DEBUG_INTERNAL_LIB == 1)
-            Serial.printf("\nPRS2: ");
+            Serial.printf("\nPRS2 %d: ", lengthInfoData);
 #endif
             memset(_OilTable[indexOilTable].operatorName, 0,
                    sizeof(_OilTable[indexOilTable].operatorName));
@@ -470,11 +617,18 @@ void ProtocolAA55::getBusData() {
 
 // get UnitID
 #if (DEBUG_INTERNAL_LIB == 1)
-            Serial.printf("\nPRS3: ");
+            Serial.printf("\nPRS3 %d: ", lengthInfoData);
 #endif
+            // get oil type which will be filled in
+            lengthInfoData =
+                checkHeaderValueMiddleData(payloadUart, &nextIndex);
+            if (lengthInfoData >
+                sizeof(_OilTable[indexOilTable].unitIDonService)) {
+              lengthInfoData = sizeof(_OilTable[indexOilTable].unitIDonService);
+            }
             memset(_OilTable[indexOilTable].unitIDonService, 0,
                    sizeof(_OilTable[indexOilTable].unitIDonService));
-            for (uint8_t xx1 = 0; xx1 < 6; xx1++) {
+            for (uint8_t xx1 = 0; xx1 < lengthInfoData; xx1++) {
               _OilTable[indexOilTable].unitIDonService[xx1] =
                   checkHeaderValueMiddleData(payloadUart, &nextIndex);
 
@@ -526,6 +680,9 @@ void ProtocolAA55::getBusData() {
                             _OilTable[indexOilTable].oilNameSpecific[xx1]);
 #endif
             }
+
+            _OilTable[indexOilTable].ProcessOutgoingOil = 0.0;
+            _OilTable[indexOilTable].ProcessIncomingOil = 0.0;
           } else if (payloadUart[2] == PID_DATA_REQ_OIL_INCOMING) {
             // sync time what u get from apps
             nextIndex                          = 2;
@@ -583,6 +740,9 @@ void ProtocolAA55::getBusData() {
               Serial.printf("%c ", _OilTable[indexOilTable].operatorName[xx1]);
 #endif
             }
+
+            _OilTable[indexOilTable].ProcessOutgoingOil = 0.0;
+            _OilTable[indexOilTable].ProcessIncomingOil = 0.0;
           } else {
             _OilTable[indexOilTable].OilStatus = OIL_IS_IDLE;
           }
@@ -613,12 +773,23 @@ void ProtocolAA55::getBusData() {
         }
 
         if (enParsingData) {
-          // parasing data depend on type of PID Data
+          // parsing data depend on type of PID Data
           if (payloadUart[2] == PID_DATA_STREAMING_OUTGOING) {
             _OilTable[indexOilTable].OilStatus = OIL_ON_OUTGOING_PROCESS;
 
-            nextIndex = 9;
-            // get timestamp
+            nextIndex = 3;
+
+            // unused data
+            // ================================================================================
+            lengthInfoData =
+                checkHeaderValueMiddleData(payloadUart, &nextIndex);
+            for (uint8_t xx3 = 0; xx3 < lengthInfoData; xx3++) {
+              unusedDataByte =
+                  checkHeaderValueMiddleData(payloadUart, &nextIndex);
+            }
+            //============================================================================================
+
+            // get current oil volume flowing through pipe
             _OilTable[indexOilTable].ProcessOutgoingOil =
                 (double)(((checkHeaderValueMiddleData(payloadUart, &nextIndex)
                            << 16) |
@@ -627,12 +798,13 @@ void ProtocolAA55::getBusData() {
                           (checkHeaderValueMiddleData(payloadUart,
                                                       &nextIndex))) &
                          0xFFFFFF) /
-                100.0;
+                1000.0;
           } else if (payloadUart[2] == PID_DATA_STREAMING_INCOMING) {
             _OilTable[indexOilTable].OilStatus = OIL_ON_INCOMING_PROCESS;
 
             nextIndex = 11;
-            // get timestamp
+
+            // get current oil volume flowing through pipe
             _OilTable[indexOilTable].ProcessIncomingOil =
                 (double)(((checkHeaderValueMiddleData(payloadUart, &nextIndex)
                            << 24) |
@@ -648,7 +820,90 @@ void ProtocolAA55::getBusData() {
           } else if ((payloadUart[2] == PID_DATA_TRANSACTION_FULL_OUTGOING) ||
                      (payloadUart[2] ==
                       PID_DATA_TRANSACTION_TRIGGER_OUTGOING)) {
-            nextIndex = 45;
+            nextIndex = 11;
+
+            // unused data =========== OPERATOR NAME
+            // =====================================================================
+            lengthInfoData =
+                checkHeaderValueMiddleData(payloadUart, &nextIndex);
+            for (uint8_t xx3 = 0; xx3 < lengthInfoData; xx3++) {
+              unusedDataByte =
+                  checkHeaderValueMiddleData(payloadUart, &nextIndex);
+            }
+            //============================================================================================
+
+            // unused data =========== UNIT ID ON SERVICE
+            // =====================================================================
+            lengthInfoData =
+                checkHeaderValueMiddleData(payloadUart, &nextIndex);
+            for (uint8_t xx3 = 0; xx3 < lengthInfoData; xx3++) {
+              unusedDataByte =
+                  checkHeaderValueMiddleData(payloadUart, &nextIndex);
+            }
+            //============================================================================================
+
+            // unused data =========== UNIT MODEL
+            // =====================================================================
+            lengthInfoData =
+                checkHeaderValueMiddleData(payloadUart, &nextIndex);
+            for (uint8_t xx3 = 0; xx3 < lengthInfoData; xx3++) {
+              unusedDataByte =
+                  checkHeaderValueMiddleData(payloadUart, &nextIndex);
+            }
+            //============================================================================================
+
+            // unused data =========== HM VALUE OF SERVICED UNIT
+            // =====================================================================
+            unusedData32 =
+                (((checkHeaderValueMiddleData(payloadUart, &nextIndex) << 24) |
+                  (checkHeaderValueMiddleData(payloadUart, &nextIndex) << 16) |
+                  (checkHeaderValueMiddleData(payloadUart, &nextIndex) << 8) |
+                  (checkHeaderValueMiddleData(payloadUart, &nextIndex))) &
+                 0xFFFFFF);
+            //============================================================================================
+
+            // unused data =========== OIL TYPE
+            // =====================================================================
+            lengthInfoData =
+                checkHeaderValueMiddleData(payloadUart, &nextIndex);
+            for (uint8_t xx3 = 0; xx3 < lengthInfoData; xx3++) {
+              unusedDataByte =
+                  checkHeaderValueMiddleData(payloadUart, &nextIndex);
+            }
+            //============================================================================================
+
+            // unused data =========== FILLING PROCESS TYPE
+            // =====================================================================
+            unusedDataByte =
+                checkHeaderValueMiddleData(payloadUart, &nextIndex);
+            //============================================================================================
+
+            // unused data =========== ACTIVITY INFORMATION
+            // =====================================================================
+            unusedDataByte =
+                checkHeaderValueMiddleData(payloadUart, &nextIndex);
+            //============================================================================================
+
+            // unused data =========== VALUE TARGET OF REFILLING OIL
+            // =====================================================================
+            unusedData32 =
+                (((checkHeaderValueMiddleData(payloadUart, &nextIndex) << 16) |
+                  (checkHeaderValueMiddleData(payloadUart, &nextIndex) << 8) |
+                  (checkHeaderValueMiddleData(payloadUart, &nextIndex))) &
+                 0xFFFFFF);
+            //============================================================================================
+
+            // get current oil volume flowing through pipe
+            _OilTable[indexOilTable].ProcessOutgoingOil =
+                (double)(((checkHeaderValueMiddleData(payloadUart, &nextIndex)
+                           << 16) |
+                          (checkHeaderValueMiddleData(payloadUart, &nextIndex)
+                           << 8) |
+                          (checkHeaderValueMiddleData(payloadUart,
+                                                      &nextIndex))) &
+                         0xFFFFFF) /
+                1000.0;
+
             // get timestamp
             _OilTable[indexOilTable].totalisatorOil =
                 (double)(((checkHeaderValueMiddleData(payloadUart, &nextIndex)
@@ -663,8 +918,62 @@ void ProtocolAA55::getBusData() {
                 1000.0;
             _OilTable[indexOilTable].OilStatus = OIL_IS_IDLE;
           } else if ((payloadUart[2] == PID_DATA_TRANSACTION_INCOMING)) {
-            nextIndex = 15;
-            // get timestamp
+            nextIndex = 3;
+
+            // unused data =========== OIL TYPE
+            // =====================================================================
+            lengthInfoData =
+                checkHeaderValueMiddleData(payloadUart, &nextIndex);
+            for (uint8_t xx3 = 0; xx3 < lengthInfoData; xx3++) {
+              unusedDataByte =
+                  checkHeaderValueMiddleData(payloadUart, &nextIndex);
+            }
+            //============================================================================================
+
+            // unused data =========== OPERATOR NAME
+            // =====================================================================
+            lengthInfoData =
+                checkHeaderValueMiddleData(payloadUart, &nextIndex);
+            for (uint8_t xx3 = 0; xx3 < lengthInfoData; xx3++) {
+              unusedDataByte =
+                  checkHeaderValueMiddleData(payloadUart, &nextIndex);
+            }
+            //============================================================================================
+
+            // unused data =========== UNIX START TIME
+            // =====================================================================
+            unusedData32 =
+                (((checkHeaderValueMiddleData(payloadUart, &nextIndex) << 24) |
+                  (checkHeaderValueMiddleData(payloadUart, &nextIndex) << 16) |
+                  (checkHeaderValueMiddleData(payloadUart, &nextIndex) << 8) |
+                  (checkHeaderValueMiddleData(payloadUart, &nextIndex))) &
+                 0xFFFFFF);
+            //============================================================================================
+
+            // unused data =========== UNIX STOP TIME
+            // =====================================================================
+            unusedData32 =
+                (((checkHeaderValueMiddleData(payloadUart, &nextIndex) << 24) |
+                  (checkHeaderValueMiddleData(payloadUart, &nextIndex) << 16) |
+                  (checkHeaderValueMiddleData(payloadUart, &nextIndex) << 8) |
+                  (checkHeaderValueMiddleData(payloadUart, &nextIndex))) &
+                 0xFFFFFF);
+            //============================================================================================
+
+            // get latest incoming oil flowing
+            _OilTable[indexOilTable].ProcessIncomingOil =
+                (double)(((checkHeaderValueMiddleData(payloadUart, &nextIndex)
+                           << 24) |
+                          (checkHeaderValueMiddleData(payloadUart, &nextIndex)
+                           << 16) |
+                          (checkHeaderValueMiddleData(payloadUart, &nextIndex)
+                           << 8) |
+                          (checkHeaderValueMiddleData(payloadUart,
+                                                      &nextIndex))) &
+                         0xFFFFFF) /
+                1000.0;
+
+            // get latest totalisator
             _OilTable[indexOilTable].totalisatorOil =
                 (double)(((checkHeaderValueMiddleData(payloadUart, &nextIndex)
                            << 24) |
