@@ -27,9 +27,9 @@ void MyAdvertisedDeviceCallbacks::onResult(
       // Send to Queue
       if (xQueueSend(beaconRawData_Q, &beacon_data, pdMS_TO_TICKS(100)) ==
           pdPASS) {
-        Serial.println("Raw BLE Data is sent to Queue");
+        // Serial.println("Raw BLE Data is sent to Queue");
       } else {
-        Serial.println("Raw BLE Data Queue is full");
+        // Serial.println("Raw BLE Data Queue is full");
       }
 
     } else {
