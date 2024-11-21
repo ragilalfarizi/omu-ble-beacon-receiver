@@ -423,8 +423,11 @@ void ProtocolAA55::SendDataBeacon(uint8_t totalDetectedBeaocon_,
   uint8_t tempValue8   = 0;
   uint16_t tempValue16 = 0;
 
-  payloadUart[idxArr]   = 0x00;
+  payloadUart[idxArr]   = 0xff;
   payloadUart[++idxArr] = 0x00;
+  payloadUart[++idxArr] = 0x00;
+  payloadUart[++idxArr] = 0xA0;
+  payloadUart[++idxArr] = _myID;
   payloadUart[++idxArr] = PID_BEACON_DATA;
 
   payloadUart[++idxArr] = addIdenfierWhenHeaderIsData(
@@ -455,6 +458,9 @@ void ProtocolAA55::SendDataBeacon(uint8_t totalDetectedBeaocon_,
 
   for (uint8_t xx8 = 0; xx8 < totalDetectedBeaocon_; xx8++) {
     tempValue8 = listDetecetecBeacon_[xx8].ID.length();
+
+    payloadUart[++idxArr] =
+        addIdenfierWhenHeaderIsData(tempValue8, payloadUart, &idxArr);
 
     for (uint8_t xx5 = 0; xx5 < tempValue8; xx5++) {
       payloadUart[++idxArr] = addIdenfierWhenHeaderIsData(
@@ -509,8 +515,8 @@ void ProtocolAA55::SendDataBeacon(uint8_t totalDetectedBeaocon_,
                                                         payloadUart, &idxArr);
   }
   checksum_calc(4, payloadUart, &idxArr);
-  payloadUart[0]        = 0xAA;
   payloadUart[1]        = 0xAA;
+  payloadUart[2]        = 0xAA;
   payloadUart[++idxArr] = 0x55;
   payloadUart[++idxArr] = 0x55;
 
