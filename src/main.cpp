@@ -282,10 +282,7 @@ void retrieveGPSData(void* pvParam) {
       masterGPS.status = 'V';
     } else {
       if (isValid) {
-        // Serial.printf("[GPS] Latitude : %f\n", masterGPS.latitude);
-        // Serial.printf("[GPS] Longitude : %f\n", masterGPS.longitude);
-        Serial.printf("[GPS] Latitude : %f\n", gps->location.lat());
-        Serial.printf("[GPS] Longitude : %f\n", gps->location.lng());
+        Serial.printf("GPS is valid");
         masterGPS.status = 'A';
       } else {
         Serial.println("[GPS] GPS is searching for a signal...");
