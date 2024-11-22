@@ -124,8 +124,12 @@ void RS485Comm(void* pvParameter) {
     // TODO: Add mutex or queue
     if (xSemaphoreTake(beaconDataMutex, portMAX_DELAY) == pdTRUE) {
       // Get GPS Data
-      masterGPS.latitude  = gps->location.lat();
-      masterGPS.longitude = gps->location.lng();
+      masterGPS.latitude  = gps->getlatitude();
+      masterGPS.longitude = gps->getLongitude();
+
+      Serial.printf(
+          "[GPS] (Master) Latitude = %f, longitude = %f, status = %c\n",
+          masterGPS.latitude, masterGPS.longitude, masterGPS.status);
 
       // Convert Unordered Map into vector
       size = beaconDataMap.size();
