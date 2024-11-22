@@ -282,7 +282,7 @@ void retrieveGPSData(void* pvParam) {
       masterGPS.status = 'V';
     } else {
       if (isValid) {
-        Serial.printf("GPS is valid");
+        Serial.printf("GPS is valid\n");
         masterGPS.status = 'A';
       } else {
         Serial.println("[GPS] GPS is searching for a signal...");
