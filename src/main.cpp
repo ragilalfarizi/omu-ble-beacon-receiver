@@ -124,8 +124,12 @@ void RS485Comm(void* pvParameter) {
     // TODO: Add mutex or queue
     if (xSemaphoreTake(beaconDataMutex, portMAX_DELAY) == pdTRUE) {
       // Get GPS Data
-      // masterGPS.latitude  = gps->location.lat();
-      // masterGPS.longitude = gps->location.lng();
+      masterGPS.latitude  = gps->getlatitude();
+      masterGPS.longitude = gps->getLongitude();
+
+      Serial.printf(
+          "[GPS] (Master) Latitude = %f, longitude = %f, status = %c\n",
+          masterGPS.latitude, masterGPS.longitude, masterGPS.status);
 
       // Convert Unordered Map into vector
       size = beaconDataMap.size();
@@ -260,7 +264,7 @@ void cleanupBeaconDataMap(void* pvParameter) {
 }
 
 void retrieveGPSData(void* pvParam) {
-  // bool isValid = false;
+  bool isValid = false;
 
   while (1) {
     Serial.println("[GPS] encoding...");
@@ -270,23 +274,16 @@ void retrieveGPSData(void* pvParam) {
       gps->encode(gpsChar);
     }
 
-    // isValid = gps->getValidation();
+    isValid = gps->getValidation();
 
     if ((gps->getCharProcessed()) < 10) {
       Serial.println(
           "[GPS] GPS module not sending data, check wiring or module power");
       masterGPS.status = 'V';
     } else {
-      if (gps->location.isUpdated()) {
-        float latitude  = static_cast<float>(gps->location.lat());
-        float longitude = static_cast<float>(gps->location.lng());
-
-        Serial.printf("[GPS] Latitude : %f\n", latitude);
-        Serial.printf("[GPS] Longitude : %f\n", longitude);
-
-        masterGPS.latitude = latitude;
-        masterGPS.latitude = longitude;
-        masterGPS.status   = 'A';
+      if (isValid) {
+        Serial.printf("GPS is valid");
+        masterGPS.status = 'A';
       } else {
         Serial.println("[GPS] GPS is searching for a signal...");
         masterGPS.status = 'V';
