@@ -514,7 +514,7 @@ void ProtocolAA55::SendDataBeacon(uint8_t totalDetectedBeaocon_,
     payloadUart[++idxArr] = addIdenfierWhenHeaderIsData(((tempValue16) & 0xFF),
                                                         payloadUart, &idxArr);
   }
-  checksum_calc(4, payloadUart, &idxArr);
+  checksum_calc(5, payloadUart, &idxArr);
   payloadUart[1]        = 0xAA;
   payloadUart[2]        = 0xAA;
   payloadUart[++idxArr] = 0x55;
