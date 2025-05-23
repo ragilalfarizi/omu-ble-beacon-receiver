@@ -246,7 +246,7 @@ void printBeaconDataMap(void* pvParameter) {
 
 void cleanupBeaconDataMap(void* pvParameter) {
   // const uint32_t timeoutInterval = 10000;          // 10 seconds
-  const uint32_t timeoutInterval = 8 * 60 * 1000;  // 8 minutes
+  const uint32_t timeoutInterval = 5 * 60 * 1000;  // 5 minutes
 
   while (1) {
     if (xSemaphoreTake(beaconDataMutex, portMAX_DELAY) == pdTRUE) {
