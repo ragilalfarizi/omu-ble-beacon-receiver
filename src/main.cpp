@@ -18,6 +18,7 @@ std::unordered_map<std::string, BeaconData_t> beaconDataMap;
 GPS* gps;
 GPSData_t masterGPS;
 ProtocolAA55 protocol(&Serial1, PROTOCOL_DEFAULT_ID);
+BusLineStatus busLineStatus = BUS_LINE_IS_BUSY;
 // HardwareSerial RS485(1);
 
 /* FORWARD DECLARATION FOR FUNCTIONS */
@@ -27,6 +28,7 @@ void dataProcessing(void* pvParameter);
 void printBeaconDataMap(void* pvParameter);
 void cleanupBeaconDataMap(void* pvParameter);
 void retrieveGPSData(void* pvParam);
+void busMonitoring(void* pvParam);
 // void printBLEHex(std::string& serviceData, size_t length);
 
 /* TASK HANDLER DECLARATION */
@@ -36,6 +38,7 @@ TaskHandle_t RS485Handler              = NULL;
 TaskHandle_t printBeaconDataMapHandler = NULL;
 TaskHandle_t cleanupDataMapHandler     = NULL;
 TaskHandle_t retrieveGPSHandler        = NULL;
+TaskHandle_t busMonitoringHandler      = NULL;
 
 /* QUEUES AND SEMAPHORE DECLARATION */
 QueueHandle_t beaconRawData_Q;
@@ -60,13 +63,13 @@ void setup() {
   masterGPS.status    = 'V';
 
   /* RS485 INIT */
-  // RS485.begin(RS485_BAUD_RATE, SERIAL_8N1, RS485_RX_PIN, RS485_TX_PIN);
   if (protocol.begin(RS485_BAUD_RATE, SERIAL_8N1, RS485_RX_PIN, RS485_TX_PIN,
                      false)) {
     Serial.println("ProtocoalAA55 has been initialized");
   } else {
     Serial.println("ProtocoalAA55 failed to initialize");
   }
+  protocol.setTimeReferenceOfBusLineisIdle(40);  // timeout for 40ms
 
   /* QUEUES AND SEMAPHORE INIT */
   beaconRawData_Q =
@@ -95,6 +98,8 @@ void setup() {
                           NULL, 2, &printBeaconDataMapHandler, 1);
   xTaskCreatePinnedToCore(RS485Comm, "RS485 Comm", 4096, NULL, 4, &RS485Handler,
                           1);
+  xTaskCreatePinnedToCore(busMonitoring, "Bus Monitoring", 4096, NULL, 4,
+                          &busMonitoringHandler, 1);
 }
 
 void loop() {}
@@ -165,9 +170,13 @@ void RS485Comm(void* pvParameter) {
       //   listDetectedBeacon[i].rssi); Serial.println("--------------------");
       // }
 
-      // Send packet data
-      protocol.SendDataBeacon(size, masterGPS, listDetectedBeacon);
-      // Serial.println("Data is sent through RS485");
+      if (busLineStatus == BUS_LINE_IS_IDLE) {
+        // Send packet data
+        protocol.SendDataBeacon(size, masterGPS, listDetectedBeacon);
+        Serial.println("[BUS] Data is sent through RS485");
+      } else {
+        // Serial.println("Bus line is busy, waiting to send data...");
+      }
 
       xSemaphoreGive(beaconDataMutex);
     }
@@ -299,5 +308,20 @@ void retrieveGPSData(void* pvParam) {
     }
 
     vTaskDelay(pdMS_TO_TICKS(2000));
+  }
+}
+
+void busMonitoring(void* pvParam) {
+  while (1) {
+    // Check the bus line status
+    busLineStatus = protocol.listeningToBusLineComm();
+
+    if (busLineStatus == BUS_LINE_IS_BUSY) {
+      // Serial.println("[BUS] BUSY. waiting for data...");
+    } else if (busLineStatus == BUS_LINE_IS_IDLE) {
+      // Serial.println("[BUS] IDLE. ready to send data.");
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(10));  // Check every second
   }
 }
