@@ -9,7 +9,7 @@
 #define RS485_TX_PIN        19
 #define PROTOCOL_DEFAULT_ID 0xB0
 
-#define FIRMWARE_VERSION "v1.3.1-250602"
+#define FIRMWARE_VERSION "v1.3.2-250905"
 
 struct GPSData_t {
   float longitude;
