@@ -1,0 +1,4 @@
+[submodule "lib/protocolAA55"]
+	path = lib/protocolAA55
+	url = git@github-company:Qimtronics/ProtocolAA55.git
+	branch = develop

@@ -18,6 +18,7 @@ std::unordered_map<std::string, BeaconData_t> beaconDataMap;
 GPS* gps;
 GPSData_t masterGPS;
 ProtocolAA55 protocol(&Serial1, PROTOCOL_DEFAULT_ID);
+BusLineStatus busLineStatus = BUS_LINE_IS_BUSY;
 // HardwareSerial RS485(1);
 
 /* FORWARD DECLARATION FOR FUNCTIONS */
@@ -27,6 +28,7 @@ void dataProcessing(void* pvParameter);
 void printBeaconDataMap(void* pvParameter);
 void cleanupBeaconDataMap(void* pvParameter);
 void retrieveGPSData(void* pvParam);
+void busMonitoring(void* pvParam);
 // void printBLEHex(std::string& serviceData, size_t length);
 
 /* TASK HANDLER DECLARATION */
@@ -36,6 +38,7 @@ TaskHandle_t RS485Handler              = NULL;
 TaskHandle_t printBeaconDataMapHandler = NULL;
 TaskHandle_t cleanupDataMapHandler     = NULL;
 TaskHandle_t retrieveGPSHandler        = NULL;
+TaskHandle_t busMonitoringHandler      = NULL;
 
 /* QUEUES AND SEMAPHORE DECLARATION */
 QueueHandle_t beaconRawData_Q;
@@ -45,6 +48,13 @@ void setup() {
   /* SERIAL INIT */
   Serial.begin(9600);
 
+  /* PRINTING FIRMWARE VERSION */
+  Serial.println("============================================");
+  Serial.println("============================================");
+  Serial.printf("FIRMWARE VERSION : %s\n", FIRMWARE_VERSION);
+  Serial.println("============================================");
+  Serial.println("============================================");
+
   /* GPS INIT */
   Serial.println("[GPS] Inisialisasi GPS");
   gps                 = new GPS();
@@ -53,13 +63,13 @@ void setup() {
   masterGPS.status    = 'V';
 
   /* RS485 INIT */
-  // RS485.begin(RS485_BAUD_RATE, SERIAL_8N1, RS485_RX_PIN, RS485_TX_PIN);
   if (protocol.begin(RS485_BAUD_RATE, SERIAL_8N1, RS485_RX_PIN, RS485_TX_PIN,
                      false)) {
     Serial.println("ProtocoalAA55 has been initialized");
   } else {
     Serial.println("ProtocoalAA55 failed to initialize");
   }
+  protocol.setTimeReferenceOfBusLineisIdle(40);  // timeout for 40ms
 
   /* QUEUES AND SEMAPHORE INIT */
   beaconRawData_Q =
@@ -88,6 +98,8 @@ void setup() {
                           NULL, 2, &printBeaconDataMapHandler, 1);
   xTaskCreatePinnedToCore(RS485Comm, "RS485 Comm", 4096, NULL, 4, &RS485Handler,
                           1);
+  xTaskCreatePinnedToCore(busMonitoring, "Bus Monitoring", 4096, NULL, 4,
+                          &busMonitoringHandler, 1);
 }
 
 void loop() {}
@@ -127,9 +139,9 @@ void RS485Comm(void* pvParameter) {
       masterGPS.latitude  = gps->getlatitude();
       masterGPS.longitude = gps->getLongitude();
 
-      Serial.printf(
-          "[GPS] (Master) Latitude = %f, longitude = %f, status = %c\n",
-          masterGPS.latitude, masterGPS.longitude, masterGPS.status);
+      // Serial.printf(
+      //     "[GPS] (Master) Latitude = %f, longitude = %f, status = %c\n",
+      //     masterGPS.latitude, masterGPS.longitude, masterGPS.status);
 
       // Convert Unordered Map into vector
       size = beaconDataMap.size();
@@ -145,22 +157,26 @@ void RS485Comm(void* pvParameter) {
       }
 
       // Print the listDetectedBeacon array before sending data
-      Serial.println("--------------------");
-      Serial.println("List of detected beacons:");
-      for (size_t i = 0; i < size; i++) {
-        Serial.printf("Beacon ID: %s\n", listDetectedBeacon[i].ID.c_str());
-        Serial.printf("GPS Status: %c\n", listDetectedBeacon[i].gps.status);
-        Serial.printf("GPS Longitude: %f\n",
-                      listDetectedBeacon[i].gps.longitude);
-        Serial.printf("GPS Latitude: %f\n", listDetectedBeacon[i].gps.latitude);
-        Serial.printf("Hour Meter: %ld\n", listDetectedBeacon[i].hourMeter);
-        Serial.printf("RSSI: %d\n", listDetectedBeacon[i].rssi);
-        Serial.println("--------------------");
-      }
+      // Serial.println("--------------------");
+      // Serial.println("List of detected beacons:");
+      // for (size_t i = 0; i < size; i++) {
+      //   Serial.printf("Beacon ID: %s\n", listDetectedBeacon[i].ID.c_str());
+      //   Serial.printf("GPS Status: %c\n", listDetectedBeacon[i].gps.status);
+      //   Serial.printf("GPS Longitude: %f\n",
+      //                 listDetectedBeacon[i].gps.longitude);
+      //   Serial.printf("GPS Latitude: %f\n",
+      //   listDetectedBeacon[i].gps.latitude); Serial.printf("Hour Meter:
+      //   %ld\n", listDetectedBeacon[i].hourMeter); Serial.printf("RSSI: %d\n",
+      //   listDetectedBeacon[i].rssi); Serial.println("--------------------");
+      // }
 
-      // Send packet data
-      protocol.SendDataBeacon(size, masterGPS, listDetectedBeacon);
-      Serial.println("Data is sent through RS485");
+      if (busLineStatus == BUS_LINE_IS_IDLE) {
+        // Send packet data
+        protocol.SendDataBeacon(size, masterGPS, listDetectedBeacon);
+        Serial.println("[BUS] Data is sent through RS485");
+      } else {
+        // Serial.println("Bus line is busy, waiting to send data...");
+      }
 
       xSemaphoreGive(beaconDataMutex);
     }
@@ -218,7 +234,7 @@ void printBeaconDataMap(void* pvParameter) {
       Serial.printf("Total Beacon Data entries: %d\n", beaconDataMap.size());
 
       // Iterate over the unordered map and print each entry
-      Serial.println("=============================================");
+      // Serial.println("=============================================");
       for (const auto& entry : beaconDataMap) {
         Serial.printf(
             "ID: %s, Voltage: %.2f, GPS Status: %c, Longitude: %.6f, Latitude: "
@@ -228,7 +244,7 @@ void printBeaconDataMap(void* pvParameter) {
             entry.second.gps.latitude, entry.second.hourMeter,
             entry.second.rssi);
       }
-      Serial.println("=============================================");
+      // Serial.println("=============================================");
 
       xSemaphoreGive(beaconDataMutex);
     }
@@ -238,7 +254,8 @@ void printBeaconDataMap(void* pvParameter) {
 }
 
 void cleanupBeaconDataMap(void* pvParameter) {
-  const uint32_t timeoutInterval = 10000;  // 10 seconds
+  // const uint32_t timeoutInterval = 10000;          // 10 seconds
+  const uint32_t timeoutInterval = 5 * 60 * 1000;  // 5 minutes
 
   while (1) {
     if (xSemaphoreTake(beaconDataMutex, portMAX_DELAY) == pdTRUE) {
@@ -267,7 +284,7 @@ void retrieveGPSData(void* pvParam) {
   bool isValid = false;
 
   while (1) {
-    Serial.println("[GPS] encoding...");
+    // Serial.println("[GPS] encoding...");
 
     while (Serial.available() > 0) {
       char gpsChar = Serial.read();
@@ -277,19 +294,34 @@ void retrieveGPSData(void* pvParam) {
     isValid = gps->getValidation();
 
     if ((gps->getCharProcessed()) < 10) {
-      Serial.println(
-          "[GPS] GPS module not sending data, check wiring or module power");
+      // Serial.println(
+      //     "[GPS] GPS module not sending data, check wiring or module power");
       masterGPS.status = 'V';
     } else {
       if (isValid) {
-        Serial.printf("GPS is valid\n");
+        // Serial.printf("GPS is valid\n");
         masterGPS.status = 'A';
       } else {
-        Serial.println("[GPS] GPS is searching for a signal...");
+        // Serial.println("[GPS] GPS is searching for a signal...");
         masterGPS.status = 'V';
       }
     }
 
     vTaskDelay(pdMS_TO_TICKS(2000));
+  }
+}
+
+void busMonitoring(void* pvParam) {
+  while (1) {
+    // Check the bus line status
+    busLineStatus = protocol.listeningToBusLineComm();
+
+    if (busLineStatus == BUS_LINE_IS_BUSY) {
+      // Serial.println("[BUS] BUSY. waiting for data...");
+    } else if (busLineStatus == BUS_LINE_IS_IDLE) {
+      // Serial.println("[BUS] IDLE. ready to send data.");
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(10));  // Check every second
   }
 }

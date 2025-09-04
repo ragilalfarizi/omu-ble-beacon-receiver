@@ -29,6 +29,16 @@ enum ListID_t {
   XMC,
   XST,
   XWT,
+  XAC,
+  XCC,
+  XCG,
+  XCO,
+  XFL,
+  XLS,
+  XMS,
+  XPP,
+  XTH,
+  XTL,
   UNKNOWN,
 };
 
