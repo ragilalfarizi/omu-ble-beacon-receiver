@@ -4,7 +4,7 @@
 
 #define BEACON_DATA_CHAR_SIZE 19
 
-#define RS485_BAUD_RATE     115200
+#define RS485_BAUD_RATE     9600
 #define RS485_RX_PIN        18
 #define RS485_TX_PIN        19
 #define PROTOCOL_DEFAULT_ID 0xB0
