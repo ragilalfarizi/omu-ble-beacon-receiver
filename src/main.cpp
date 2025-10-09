@@ -180,7 +180,7 @@ void RS485Comm(void* pvParameter) {
 
       xSemaphoreGive(beaconDataMutex);
     }
-    vTaskDelay(pdMS_TO_TICKS(2000));
+    vTaskDelay(pdMS_TO_TICKS(3000));
   }
 }
 
